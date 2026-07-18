@@ -1,0 +1,17 @@
+version: 3
+
+tasks:
+  default:
+    silent: true
+    desc: Show available tasks
+    cmds:
+      - task --list --color
+
+  kicad:modu-tone:business-card:
+    desc: Open modu-tone/business-card KiCad project
+    aliases:
+      - kicad:modu-tone
+      - kicad:mt
+      - kicad:m
+    cmds:
+      - open modu-tone/business-card.kicad_pro
