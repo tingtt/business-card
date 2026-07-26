@@ -1,5 +1,11 @@
 version: 3
 
+includes:
+  holder:
+    taskfile: holder/Taskfile.yaml
+    dir: holder
+    flatten: true
+
 tasks:
   default:
     silent: true
