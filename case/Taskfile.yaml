@@ -1,0 +1,66 @@
+version: 3
+
+vars:
+  OPENSCAD_BIN:
+    sh: |
+      if [ -n "${OPENSCAD_BIN:-}" ]; then
+        printf '%s\n' "${OPENSCAD_BIN}"
+      elif command -v openscad >/dev/null 2>&1; then
+        command -v openscad
+      elif command -v zsh >/dev/null 2>&1; then
+        zsh_alias="$(zsh -ic 'if [[ -n "${aliases[openscad]-}" ]]; then print -r -- "${aliases[openscad]}"; fi' 2>/dev/null | tail -n 1 || true)"
+        if [ "${zsh_alias}" = "/Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD" ]; then
+          printf '%s\n' 'arch -x86_64 /Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD'
+        elif [ -n "${zsh_alias}" ]; then
+          printf '%s\n' "${zsh_alias}"
+        elif [ -x /Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD ]; then
+          printf '%s\n' 'arch -x86_64 /Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD'
+        fi
+      elif [ -x /Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD ]; then
+        printf '%s\n' 'arch -x86_64 /Applications/OpenSCAD.app/Contents/MacOS/OpenSCAD'
+      fi
+
+tasks:
+  openscad:case:check:
+    desc: Verify openscad is available via OPENSCAD_BIN, PATH, zsh aliases, or OpenSCAD.app
+    run: once
+    cmds:
+      - |
+        if [ -n "{{.OPENSCAD_BIN}}" ]; then
+          echo "openscad: {{.OPENSCAD_BIN}}"
+          exit 0
+        fi
+        echo "Warning: openscad is not available via OPENSCAD_BIN, PATH, ~/.zshrc aliases, or OpenSCAD.app"
+        echo 'Install OpenSCAD or set OPENSCAD_BIN before running SCAD export tasks.'
+        exit 1
+
+  scad:case:body:export:
+    desc: Export case body printable STL file from SCAD source
+    aliases:
+      - scad:case:body
+      - scad:c:b
+    deps:
+      - openscad:case:check
+    cmds:
+      - |
+        {{.OPENSCAD_BIN}} -o case.stl -D 'print_part="body"' main.scad
+
+  scad:case:cover:export:
+    desc: Export case cover printable STL file from SCAD source
+    aliases:
+      - scad:case:cover
+      - scad:c:cv
+    deps:
+      - openscad:case:check
+    cmds:
+      - |
+        {{.OPENSCAD_BIN}} -o cover.stl -D 'print_part="cover"' main.scad
+
+  scad:case:export:
+    desc: Export printable case STL files from SCAD source
+    aliases:
+      - scad:case
+      - scad:c
+    deps:
+      - scad:case:body:export
+      - scad:case:cover:export

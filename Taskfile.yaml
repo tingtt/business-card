@@ -1,6 +1,11 @@
 version: 3
 
 includes:
+  case:
+    taskfile: case/Taskfile.yaml
+    dir: case
+    flatten: true
+
   holder:
     taskfile: holder/Taskfile.yaml
     dir: holder
