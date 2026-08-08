@@ -58,7 +58,7 @@ module pin_body() {
     }
 }
 
-// pin_features adds the larger hinge pins and smaller connector pegs.
+// pin_features adds the larger hinge pins and vertical closing ribs.
 module pin_features() {
   paired_end_cylinders(
     pin_depth,
@@ -68,13 +68,15 @@ module pin_features() {
     hinge_pin_radius
   );
 
-  paired_end_caps(
+  paired_end_vertical_ribs(
     pin_depth,
     pin_end_projection,
-    connector_peg_x,
-    connector_peg_z,
-    connector_peg_radius,
-    connector_cap_overlap
+    connector_rib_x,
+    connector_rib_z,
+    connector_rib_width,
+    connector_rib_height,
+    connector_rib_projection,
+    connector_rib_overlap
   );
 }
 

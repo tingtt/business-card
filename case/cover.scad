@@ -72,15 +72,15 @@ module socket_features() {
 
     paired_end_bosses(
       socket_depth,
-      connector_hole_x,
-      connector_hole_z,
+      connector_groove_x,
+      connector_groove_z,
       connector_outer_radius,
       socket_end_projection
     );
   }
 }
 
-// socket_cutouts removes the hinge and closing connector receiver holes.
+// socket_cutouts removes the hinge holes and vertical closing receiver grooves.
 module socket_cutouts() {
   paired_end_holes(
     socket_depth,
@@ -90,12 +90,13 @@ module socket_cutouts() {
     hinge_socket_radius
   );
 
-  paired_end_holes(
+  paired_end_vertical_grooves(
     socket_depth,
-    connector_hole_x,
-    connector_hole_z,
+    connector_groove_x,
+    connector_groove_z,
     socket_end_projection + wall_thickness,
-    connector_hole_radius
+    connector_groove_width,
+    connector_groove_height
   );
 }
 

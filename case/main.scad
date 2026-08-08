@@ -30,7 +30,7 @@ $fn = 64; // global curve segment count for circular connector features
 
 // --- Preview selection --------------------------------------------------------
 
-preview_part = "closed"; // "assembly", "closed", "socket", or "pin"
+preview_part = "assembly"; // "assembly", "closed", "socket", or "pin"
 preview_open_angle = 180; // default visual opening angle around the hinge axis
 print_part = ""; // export selector: "", "body", or "cover"
 
@@ -86,14 +86,18 @@ hinge_socket_z = hinge_pin_z; // hinge hole center above bottom
 
 // --- Connector dimensions -----------------------------------------------------
 
-connector_peg_radius = 0.6; // right-upper closing connector peg radius
-connector_hole_radius = 1; // right-upper closing connector hole radius
+connector_rib_width = 1.0; // snap rib width along X on the end ZX faces
+connector_rib_height = 9.0; // snap rib length along Z on the end ZX faces
+connector_rib_projection = 0.9; // snap rib protrusion normal to the ZX faces
+connector_rib_bite = 0.06; // width interference so the lid groove grips the rib
+connector_groove_width = connector_rib_width - connector_rib_bite; // groove throat width along X
+connector_groove_height = connector_rib_height + 0.4; // groove length along Z with end clearance
 connector_outer_radius = 2.5; // visible reinforcing boss around connector
-connector_cap_overlap = 0.2; // shallow overlap that anchors the rounded connector cap
-connector_peg_x = 27.5; // connector peg center from case left face
-connector_peg_z = 44.99; // connector peg center above bottom
-connector_hole_x = connector_peg_x; // connector hole center from cover left face
-connector_hole_z = connector_peg_z; // connector hole center above bottom
+connector_rib_overlap = 0.15; // shallow overlap that anchors the rib into each end face
+connector_rib_x = 27.5; // connector rib center from case left face near the +X side
+connector_rib_z = 45.0; // connector rib center above bottom
+connector_groove_x = connector_rib_x; // connector groove center from cover left face
+connector_groove_z = connector_rib_z; // connector groove center above bottom
 
 // --- Derived dimensions -------------------------------------------------------
 
@@ -138,16 +142,36 @@ assert(
   "hinge_pin_length must still engage the cover end plate"
 );
 assert(
-  connector_peg_radius < connector_hole_radius,
-  "connector peg needs hole clearance"
+  connector_rib_width > connector_rib_bite,
+  "connector rib width must exceed the snap bite"
+);
+assert(
+  connector_rib_height > connector_rib_width,
+  "connector rib height must exceed its width"
+);
+assert(
+  connector_rib_projection > connector_rib_overlap,
+  "connector rib projection must exceed the face overlap"
+);
+assert(
+  connector_groove_width >= 0.8,
+  "connector groove width must leave a printable slot"
+);
+assert(
+  connector_groove_height > connector_rib_height,
+  "connector groove height must clear the rib ends"
+);
+assert(
+  connector_rib_z + connector_rib_height / 2 < pin_slope_top_z,
+  "connector rib must stay below the sloped case mouth"
 );
 assert(
   hinge_outer_radius > hinge_socket_radius,
   "hinge boss must be larger than hinge socket"
 );
 assert(
-  connector_outer_radius > connector_hole_radius,
-  "connector boss must be larger than connector hole"
+  connector_outer_radius > connector_groove_width / 2,
+  "connector boss must be wider than connector groove"
 );
 
 // --- 2D profiles --------------------------------------------------------------
@@ -225,6 +249,22 @@ module xz_prism_y(points, depth) {
       polygon(points=points);
 }
 
+// xz_children_prism_y extrudes child 2D profiles from XZ along +Y.
+module xz_children_prism_y(depth) {
+  assert(depth > 0, "depth must be positive");
+
+  multmatrix(
+    [
+      [1, 0, 0, 0],
+      [0, 0, 1, 0],
+      [0, 1, 0, 0],
+      [0, 0, 0, 1],
+    ]
+  )
+    linear_extrude(height=depth)
+      children();
+}
+
 // cylinder_y creates a cylinder whose local axis runs from Y=0 to Y=length.
 module cylinder_y(length, radius) {
   assert(length > 0, "length must be positive");
@@ -257,37 +297,6 @@ module paired_end_cylinders(depth, x, z, length, radius) {
     rounded_cylinder_y(length, radius);
 }
 
-// hemisphere_y creates a half sphere protruding along the requested Y direction.
-module hemisphere_y(radius, direction) {
-  assert(radius > 0, "radius must be positive");
-  assert(
-    direction == -1 || direction == 1,
-    "direction must be -1 for front or 1 for rear"
-  );
-
-  eps = 0.01; // avoids a zero-thickness clipping boundary
-  clip_y = direction > 0 ? -eps : -2 * radius - eps;
-
-  intersection() {
-    sphere(r=radius);
-
-    translate([-radius - eps, clip_y, -radius - eps])
-      cube([2 * radius + 2 * eps, 2 * radius + 2 * eps, 2 * radius + 2 * eps]);
-  }
-}
-
-// paired_end_caps places low-profile hemispherical connector bumps on both end faces.
-module paired_end_caps(depth, face_offset, x, z, radius, overlap) {
-  assert(depth > 2 * face_offset, "depth must be larger than 2 * face_offset");
-  assert(overlap >= 0, "overlap must be non-negative");
-
-  translate([x, face_offset + overlap, z])
-    hemisphere_y(radius, -1);
-
-  translate([x, depth - face_offset - overlap, z])
-    hemisphere_y(radius, 1);
-}
-
 // paired_end_holes subtracts front and rear receiver holes.
 module paired_end_holes(depth, x, z, length, radius) {
   eps = 0.01; // ensures the subtraction passes fully through the receivers
@@ -298,6 +307,66 @@ module paired_end_holes(depth, x, z, length, radius) {
 
   translate([x, depth - length - eps, z])
     rounded_cylinder_y(cut_len, radius);
+}
+
+// vertical_capsule_2d creates a centered slot profile running along local Z.
+module vertical_capsule_2d(width, height) {
+  assert(width > 0, "width must be positive");
+  assert(height > width, "height must be larger than width");
+
+  radius = width / 2;
+  center_offset = height / 2 - radius;
+
+  hull() {
+    translate([0, -center_offset])
+      circle(r=radius);
+
+    translate([0, center_offset])
+      circle(r=radius);
+  }
+}
+
+// paired_end_vertical_ribs places matching Z-running ribs on both end ZX faces.
+module paired_end_vertical_ribs(
+  depth,
+  face_offset,
+  x,
+  z,
+  width,
+  height,
+  projection,
+  overlap
+) {
+  assert(depth > 2 * face_offset, "depth must be larger than 2 * face_offset");
+  assert(projection > overlap, "projection must exceed overlap");
+  assert(width > 0, "width must be positive");
+  assert(height > width, "height must be larger than width");
+
+  translate([x, face_offset - projection + overlap, z])
+    xz_children_prism_y(projection)
+      vertical_capsule_2d(width, height);
+
+  translate([x, depth - face_offset - overlap, z])
+    xz_children_prism_y(projection)
+      vertical_capsule_2d(width, height);
+}
+
+// paired_end_vertical_grooves subtracts matching Z-running receiver grooves.
+module paired_end_vertical_grooves(depth, x, z, length, width, height) {
+  assert(length > 0, "length must be positive");
+  assert(width > 0, "width must be positive");
+  assert(height > width, "height must be larger than width");
+
+  eps = 0.01; // ensures the groove cuts pass fully through the receivers
+  cut_len = length + 2 * eps;
+
+  translate([x, -eps, z])
+    xz_children_prism_y(cut_len)
+      vertical_capsule_2d(width, height);
+
+  translate([x, depth - length - eps, z])
+    xz_children_prism_y(cut_len)
+      vertical_capsule_2d(width, height);
 }
 
 // paired_end_bosses adds reinforcing bosses at both end connector zones.
